@@ -1,0 +1,256 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Word Finding</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Fraunces:opsz,wght@9..144,600&display=swap">
+<style>
+/* Layout: one phone-sized assistant, short caption above; the command slot is the focus */
+:root{
+  --bg:#EDF1F4; --surface:#FFFFFF; --ink:#16212B; --muted:#56646F; --line:#D5DDE4;
+  --accent:#2E5E8C; --accent-ink:#FFFFFF; --slot:#F2B84B; --slot-soft:#FCEFD2; --user:#E3ECF5; --ok:#2F7D5B;
+  --f-body:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-display:"Fraunces",Georgia,"Times New Roman",serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0F151B; --surface:#18212A; --ink:#E6EDF3; --muted:#9AA8B5; --line:#2A3642;
+  --accent:#7FB0E0; --accent-ink:#0F151B; --slot:#E3A93A; --slot-soft:#3A2E17; --user:#22334A; --ok:#6FCB9F; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0F151B; --surface:#18212A; --ink:#E6EDF3; --muted:#9AA8B5; --line:#2A3642;
+  --accent:#7FB0E0; --accent-ink:#0F151B; --slot:#E3A93A; --slot-soft:#3A2E17; --user:#22334A; --ok:#6FCB9F; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:17px;line-height:1.5}
+.wrap{max-width:460px;margin:0 auto;padding-inline:16px;padding-block:24px 40px;display:grid;gap:16px}
+header h1{font-family:var(--f-display);font-weight:600;font-size:34px;line-height:1.1;margin:0 0 4px}
+header p{margin:0;color:var(--muted);font-size:15px}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+button{font:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:3px solid var(--slot);outline-offset:2px}
+.btn{border:1px solid var(--accent);background:transparent;color:var(--accent);border-radius:999px;padding:6px 14px;font-weight:700;font-size:15px}
+.btn.solid{background:var(--accent);color:var(--accent-ink)}
+.toggle{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:14px}
+.phone{background:var(--surface);border:1px solid var(--line);border-radius:28px;display:flex;flex-direction:column;height:min(680px,82vh);min-height:540px;overflow:hidden;position:relative;box-shadow:0 12px 40px rgba(20,40,60,.12)}
+.ph-head{display:flex;justify-content:space-between;align-items:center;padding:12px 20px;border-bottom:1px solid var(--line);font-size:14px;color:var(--muted)}
+.state{display:flex;align-items:center;gap:8px}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--line)}
+.state.on .dot{background:var(--slot);animation:pulse 1.2s infinite}
+@keyframes pulse{50%{opacity:.35}}
+.slotbox{padding:14px 20px;border-bottom:1px solid var(--line);display:grid;gap:8px}
+.slot{font-size:24px;font-weight:700;display:flex;gap:8px;align-items:baseline;min-height:36px}
+.slot .idle{font-weight:400;color:var(--muted);font-size:17px}
+.blank{min-width:110px;border-bottom:3px dashed var(--slot);background:var(--slot-soft);border-radius:6px 6px 0 0;padding:0 10px;text-align:center;color:var(--muted)}
+.blank.filled{border-bottom-style:solid;color:var(--ink)}
+.cands{display:flex;flex-wrap:wrap;gap:6px}
+.cand{font-size:14px;border:1px solid var(--line);border-radius:999px;padding:1px 10px;color:var(--muted);transition:opacity .3s}
+.cand.out{opacity:.25;text-decoration:line-through}
+.log{flex:1;overflow-y:auto;padding:14px 20px;display:flex;flex-direction:column;gap:10px}
+.msg{max-width:85%;padding:10px 14px;border-radius:16px}
+.msg.bot{background:var(--bg);border-bottom-left-radius:4px;align-self:flex-start}
+.msg.user{background:var(--user);border-bottom-right-radius:4px;align-self:flex-end}
+.msg.saved{align-self:center;background:transparent;border:1px dashed var(--ok);color:var(--ok);font-size:15px;text-align:center}
+.live{min-height:24px;padding:0 20px;color:var(--muted);font-style:italic;font-size:15px}
+.sugg{padding:0 20px;font-size:13px;color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
+.chips{display:flex;flex-wrap:wrap;gap:8px;padding:6px 20px 8px}
+.chip{border:2px solid var(--accent);background:var(--surface);color:var(--accent);border-radius:12px;padding:10px 16px;font-weight:700;min-height:48px}
+.chip:hover{background:var(--accent);color:var(--accent-ink)}
+.chip.likely{border-style:dashed}
+.chip.short{border-color:var(--ok);color:var(--ok)}
+.inrow{display:flex;gap:10px;padding:10px 16px 14px;border-top:1px solid var(--line);align-items:center}
+.inrow input{flex:1;min-width:0;font:inherit;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--ink)}
+.mic{width:56px;height:56px;flex:none;border-radius:50%;border:none;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center}
+.mic.on{background:var(--slot);color:#1b1b1b}
+.mic svg{width:24px;height:24px}
+.note{margin:0 16px;padding:8px 12px;border-radius:10px;background:var(--slot-soft);font-size:14px}
+.calling{position:absolute;inset:0;background:var(--accent);color:var(--accent-ink);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:24px}
+.calling .who{font-family:var(--f-display);font-size:40px}
+.calling button{border:2px solid var(--accent-ink);background:transparent;color:var(--accent-ink);border-radius:999px;padding:10px 24px;font-weight:700}
+@media (prefers-reduced-motion:reduce){.state.on .dot{animation:none}.cand{transition:none}}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Word Finding</h1>
+    <p>Say “Call… um…” and pause, or tap “Call someone”. Run it twice to see the saved shortcut.</p>
+  </header>
+  <div class="controls">
+    <button class="btn solid" id="demoBtn" type="button">Play demo</button>
+    <button class="btn" id="resetBtn" type="button">Start over</button>
+    <label class="toggle"><input type="checkbox" id="ttsToggle" checked> Spoken replies</label>
+  </div>
+  <section class="phone" aria-label="Assistant">
+    <div class="ph-head"><span>Assistant · Word Finding on</span><span class="state" id="state"><span class="dot"></span><span id="stateTxt">Idle</span></span></div>
+    <div class="slotbox">
+      <div class="slot" id="slot" aria-live="polite"><span class="idle">Your command will build here</span></div>
+      <div class="cands" id="cands" aria-hidden="true"></div>
+    </div>
+    <div class="log" id="log" aria-live="polite"></div>
+    <div class="live" id="live"></div>
+    <div class="sugg" id="sugg" hidden></div>
+    <div class="chips" id="chips"></div>
+    <p class="note" id="note" hidden></p>
+    <form class="inrow" id="form">
+      <input id="text" type="text" placeholder="Type or tap the mic" autocomplete="off" aria-label="Message">
+      <button class="mic" id="mic" type="button" aria-label="Start listening"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+    </form>
+    <div class="calling" id="calling" hidden><div>Calling</div><div class="who" id="callWho"></div><button type="button" id="endCall">End call</button></div>
+  </section>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+/* Sample contacts; "freq" stands in for the user's own call history */
+const CONTACTS=[
+  {name:"Mom",first:"m",group:"family",keys:["mom","mother"],freq:9},
+  {name:"Dad",first:"d",group:"family",keys:["dad","father"],freq:4},
+  {name:"Mina",first:"m",group:"family",keys:["mina","sister"],freq:8,rel:"my sister"},
+  {name:"Jae",first:"j",group:"family",keys:["jae","brother"],freq:2},
+  {name:"Mark",first:"m",group:"friend",keys:["mark"],freq:6},
+  {name:"Sophie",first:"s",group:"friend",keys:["sophie"],freq:3},
+  {name:"Ben",first:"b",group:"friend",keys:["ben"],freq:1}];
+const shortcuts=[]; /* learned during this session */
+let S;
+const norm=t=>t.toLowerCase().replace(/[^a-z0-9\s']/g," ").replace(/\s+/g," ").trim();
+const has=(t,k)=>new RegExp("(^|\\s)"+k+"s?(\\s|$)").test(t);
+const YES=/\b(yes|yeah|yep|right|correct|sure|ok|okay)\b/, NO=/\b(no|nope|not)\b/;
+
+function reset(clear){
+  S={step:"start",cands:[...CONTACTS],letterAsked:false,last:null,path:[]};
+  renderSlot(false);
+  if(clear!==false){$("log").innerHTML="";}
+  ask("What would you like to do?",["Call someone"],shortcutChips());
+}
+function shortcutChips(){return shortcuts.map(s=>({label:"★ Call "+s.label,value:"call "+s.label,cls:"short"}))}
+function addMsg(cls,text){const d=document.createElement("div");d.className="msg "+cls;d.textContent=text;$("log").appendChild(d);$("log").scrollTop=1e9}
+function setChips(main,extra=[],suggLabel=""){
+  const c=$("chips");c.innerHTML="";
+  $("sugg").hidden=!suggLabel;$("sugg").textContent=suggLabel;
+  [...extra,...main.map(x=>typeof x==="string"?{label:x,value:x}:x)].forEach(x=>{
+    const b=document.createElement("button");b.type="button";b.className="chip "+(x.cls||"");b.textContent=x.label;b.onclick=()=>handle(x.value);c.appendChild(b)});
+}
+function speak(text,done){
+  if(!$("ttsToggle").checked||!window.speechSynthesis){done&&setTimeout(done,300);return}
+  speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);u.lang="en-US";u.rate=.92;
+  u.onend=()=>done&&done();u.onerror=()=>done&&done();speechSynthesis.speak(u);
+}
+function ask(text,chips=[],extra=[],suggLabel=""){
+  S.last={text,chips,extra,suggLabel};addMsg("bot",text);setChips(chips,extra,suggLabel);
+  speak(text,()=>{if(handsFree&&!demoRunning&&S.step!=="done")startListen()});
+}
+function renderSlot(active,fill){
+  const slot=$("slot"),cands=$("cands");
+  if(!active){slot.innerHTML='<span class="idle">Your command will build here</span>';cands.innerHTML="";return}
+  slot.innerHTML="";const v=document.createElement("span");v.textContent="Call";slot.appendChild(v);
+  const b=document.createElement("span");b.className="blank"+(fill?" filled":"");b.textContent=fill||"?";slot.appendChild(b);
+  cands.innerHTML="";const live=new Set(S.cands.map(c=>c.name));
+  CONTACTS.forEach(c=>{const s=document.createElement("span");s.className="cand"+(live.has(c.name)||fill===c.name?"":" out");s.textContent=c.name;cands.appendChild(s)});
+}
+const likely=list=>[...list].sort((a,b)=>b.freq-a.freq).slice(0,2).map(c=>({label:c.name,value:c.name,cls:"likely"}));
+const joinOr=a=>a.length<2?a[0]:a.slice(0,-1).join(", ")+" or "+a.at(-1);
+
+function handle(raw){
+  const t=norm(raw);if(!t)return;
+  stopListen();addMsg("user",raw);setChips([]);
+  if(/\b(cancel|stop)\b/.test(t)){addMsg("bot","Okay, cancelled.");return reset(false)}
+  const sc=shortcuts.find(s=>t.includes(s.label.toLowerCase()));
+  if(sc){S.cands=[sc.contact];renderSlot(true);return call(sc.contact,true)}
+  const direct=CONTACTS.filter(c=>c.keys.some(k=>has(t,k)));
+  if(S.step==="start"){
+    if(/\b(call|phone|ring|dial)\b/.test(t)){
+      renderSlot(true);
+      if(direct.length===1)return confirmName(direct[0]);
+      S.step="group";return ask("Is it a family member or a friend?",["Family","Friend"],likely(S.cands),"Likely, from your recent calls");
+    }
+    S.step="intent";return ask("Do you want to call someone?",["Yes","No"]);
+  }
+  if(S.step==="intent"){
+    if(YES.test(t)){renderSlot(true);S.step="group";return ask("Is it a family member or a friend?",["Family","Friend"],likely(S.cands),"Likely, from your recent calls")}
+    if(NO.test(t)){addMsg("bot","Okay. Calling is the only task in this prototype.");return reset(false)}
+  }
+  if(direct.length===1)return confirmName(direct[0]);
+  if(S.step==="group"){
+    const g=/famil|relative/.test(t)?"family":/friend/.test(t)?"friend":null;
+    if(g){S.path.push(g==="family"?"family":"friend");S.cands=S.cands.filter(c=>c.group===g);renderSlot(true);return next()}
+    if(/not sure|don ?t know/.test(t))return next();
+  }
+  if(S.step==="letter"){
+    if(YES.test(t)){S.path.push("starts with M");S.cands=S.cands.filter(c=>c.first==="m")}
+    else if(NO.test(t)){S.cands=S.cands.filter(c=>c.first!=="m")}
+    else return again();
+    renderSlot(true);return next();
+  }
+  if(S.step==="choose"){
+    if(/none|\bno\b|neither/.test(t)){S.cands=CONTACTS.filter(c=>!S.cands.includes(c));renderSlot(true);return next()}
+  }
+  if(S.step==="confirm"){
+    if(YES.test(t))return call(S.pending,false);
+    if(NO.test(t)){S.cands=S.cands.filter(c=>c!==S.pending);renderSlot(true);return next()}
+  }
+  again();
+}
+function again(){const l=S.last;S.last=null;addMsg("bot","Sorry, I didn't catch that.");ask(l.text,l.chips,l.extra,l.suggLabel)}
+function next(){
+  const c=S.cands;
+  if(c.length===1)return confirmName(c[0]);
+  if(c.length>3&&!S.letterAsked&&c.some(x=>x.first==="m")&&c.some(x=>x.first!=="m")){
+    S.letterAsked=true;S.step="letter";return ask("Does the name start with “M”?",["Yes","No"]);
+  }
+  S.step="choose";
+  return ask("Is it "+joinOr(c.map(x=>x.name))+"?",[...c.map(x=>({label:x.name,value:x.name})),"None of these"]);
+}
+function confirmName(c){S.pending=c;S.step="confirm";S.cands=[c];renderSlot(true);ask(`Call ${c.name}?`,["Yes","No"])}
+function call(c,viaShortcut){
+  S.step="done";handsFree=false;renderSlot(true,c.name);
+  addMsg("bot",`Calling ${c.name}.`);speak(`Calling ${c.name}.`);
+  if(!viaShortcut&&!shortcuts.some(s=>s.contact===c)){
+    const label=c.rel||c.name;
+    shortcuts.push({label,contact:c});
+    setTimeout(()=>addMsg("saved",`Shortcut learned: next time, “Call ${label}” or tap ★`),600);
+  }
+  setTimeout(()=>{$("callWho").textContent=c.name;$("calling").hidden=false},1400);
+}
+$("endCall").onclick=()=>{$("calling").hidden=true;addMsg("bot","Call ended.");reset(false)};
+$("form").addEventListener("submit",e=>{e.preventDefault();const v=$("text").value;$("text").value="";handle(v)});
+$("resetBtn").onclick=()=>{demoRunning=false;stopListen();$("calling").hidden=true;reset()};
+
+/* Voice: waits longer when it hears "call" without a name */
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+let rec=null,listening=false,handsFree=false,timer=null,quiet=null;
+function setState(on,txt){$("state").classList.toggle("on",on);$("stateTxt").textContent=txt;$("mic").classList.toggle("on",on);$("mic").setAttribute("aria-label",on?"Stop listening":"Start listening")}
+function startListen(){
+  if(listening)return;
+  if(!SR){$("note").textContent="Voice input needs Chrome. Use the buttons or type instead.";$("note").hidden=false;return}
+  if(window.speechSynthesis)speechSynthesis.cancel();
+  rec=new SR();rec.lang="en-US";rec.continuous=true;rec.interimResults=true;
+  rec.onresult=e=>{
+    let txt="";for(let i=0;i<e.results.length;i++)txt+=e.results[i][0].transcript;
+    $("live").textContent=txt;clearTimeout(timer);clearTimeout(quiet);
+    const n=norm(txt),stalled=S.step==="start"&&/\b(call|phone)\b/.test(n)&&!CONTACTS.some(c=>c.keys.some(k=>has(n,k)));
+    if(stalled)setState(true,"Take your time…");
+    timer=setTimeout(finish,stalled?4500:1800);
+  };
+  rec.onerror=ev=>{if(/not-allowed/.test(ev.error)){handsFree=false;$("note").textContent="The microphone is blocked here. Open the HTML file in Chrome for voice, or use the buttons.";$("note").hidden=false}stopListen()};
+  rec.onend=()=>{if(listening)finish()};
+  try{rec.start()}catch(e){return}
+  listening=true;handsFree=true;setState(true,"Listening");
+  quiet=setTimeout(()=>{if(!$("live").textContent)stopListen()},9000);
+}
+function stopListen(){clearTimeout(timer);clearTimeout(quiet);listening=false;if(rec){try{rec.stop()}catch(e){}}setState(false,"Idle");$("live").textContent=""}
+function finish(){if(!listening)return;const t=$("live").textContent;stopListen();if(t)handle(t)}
+$("mic").onclick=()=>{if(listening){handsFree=false;finish()}else startListen()};
+
+/* Scripted demo: first run finds the word, second run uses the learned shortcut */
+let demoRunning=false;
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+async function idle(){await wait(700);while(window.speechSynthesis&&speechSynthesis.speaking)await wait(200);await wait(500)}
+async function typeSay(line,pause){if(!demoRunning)return;$("live").textContent="";for(const ch of line){$("live").textContent+=ch;await wait(70)}
+  if(pause){setState(true,"Take your time…");await wait(2200);setState(false,"Idle")}await wait(400);$("live").textContent="";handle(line);await idle()}
+$("demoBtn").onclick=async()=>{
+  if(demoRunning)return;demoRunning=true;handsFree=false;stopListen();$("calling").hidden=true;shortcuts.length=0;reset();await idle();
+  await typeSay("Um… I want… um…",true);
+  for(const l of["Yes","Family","Yes","Mina","Yes"])await typeSay(l);
+  await wait(2600);if(!demoRunning)return;$("endCall").click();await idle();
+  await typeSay("Call my sister");
+  demoRunning=false;
+};
+reset();
+</script>
